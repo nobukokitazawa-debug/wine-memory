@@ -1,0 +1,6 @@
+<svg viewBox="0 0 100 100" width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" fill="#e8c2d8"/>
+  <rect x="7" y="7" width="86" height="86" rx="22" fill="none" stroke="#c9a24b" stroke-width="2.5"/>
+  <path d="M39 23 h22 a2 2 0 0 1 2 2 c0 12 -6 19 -11 21 v15 h7 a2 2 0 0 1 0 4 h-18 a2 2 0 0 1 0 -4 h7 v-15 c-5 -2 -11 -9 -11 -21 a2 2 0 0 1 2 -2 z" fill="#8a1d3c"/>
+  <text x="50" y="83" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="13" fill="#8a1d3c">Memory</text>
+</svg>
