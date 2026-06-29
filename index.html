@@ -136,9 +136,43 @@
   .btn.ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
   .btn.del { background: transparent; color: var(--wine); border: 1px solid var(--wine-soft); flex: 0 0 50px; font-size: 20px; }
 
-  .menu-btn {
+  .gear {
     background: none; border: none; color: var(--ink-faint);
-    font-size: 13px; cursor: pointer; padding: 4px;
+    font-size: 22px; cursor: pointer; padding: 4px; line-height: 1;
+  }
+  .gear:active { color: var(--wine); }
+
+  .settings-panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; margin: 0 0 14px;
+  }
+  .settings-title { margin: 0 0 8px; font-size: 12px; color: var(--ink-faint); }
+  .menu-btn {
+    display: block; width: 100%; text-align: left;
+    background: none; border: none; color: var(--wine);
+    font-size: 15px; cursor: pointer; padding: 10px 4px; font-family: inherit;
+    border-top: 1px solid var(--line);
+  }
+  .settings-title + .menu-btn { border-top: none; }
+
+  .searchbar { display: flex; align-items: center; gap: 10px; margin: 0 2px 6px; }
+  #searchInput {
+    flex: 1; height: 40px; border: 1px solid var(--line); border-radius: 20px;
+    padding: 0 16px; font-size: 15px; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  #searchInput:focus { outline: none; border-color: var(--wine); }
+  .searchbar .count { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+
+  .name-input {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; font-size: 16px; font-family: inherit;
+    background: #fff; color: var(--ink); margin-bottom: 10px;
+  }
+  .name-input:focus { outline: none; border-color: var(--wine); }
+
+  .entry .wname {
+    font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 2px;
+    word-break: break-word;
   }
 </style>
 </head>
@@ -146,8 +180,21 @@
 <div class="wrap">
   <header>
     <h1>ワインの記憶</h1>
-    <span class="count" id="count"></span>
+    <button class="gear" id="settingsBtn" aria-label="設定">⚙</button>
   </header>
+
+  <div class="settings-panel" id="settingsPanel" style="display:none">
+    <p class="settings-title">バックアップ（記憶の控え）</p>
+    <button class="menu-btn" id="exportBtn">📤 書き出す（全部の控えを保存）</button>
+    <button class="menu-btn" id="importBtn">📥 読み込む（控えから戻す）</button>
+    <input type="file" id="importInput" accept="application/json" hidden />
+  </div>
+
+  <div class="searchbar" id="searchbar">
+    <input type="search" id="searchInput" placeholder="🔍 ワイン名で探す（例：ラトゥール）" />
+    <span class="count" id="count"></span>
+  </div>
+
   <div id="list"></div>
 </div>
 
@@ -168,6 +215,7 @@
     </div>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
     <input type="file" id="photoInput" accept="image/*" hidden />
+    <input type="text" id="nameInput" class="name-input" placeholder="ワイン名（例：シャトー・ラトゥール 2015）" />
     <textarea id="noteInput" placeholder="今飲んで思ったこと… 香り、味、余韻。何と合わせた？ 合った？"></textarea>
     <div class="date-row">
       <span>いつ</span>
@@ -177,12 +225,6 @@
       <button class="btn ghost" id="cancelBtn">やめる</button>
       <button class="btn del" id="delBtn" style="display:none">🗑</button>
       <button class="btn save" id="saveBtn">残す</button>
-    </div>
-    <div style="text-align:center; margin-top:14px;">
-      <button class="menu-btn" id="exportBtn">バックアップを書き出す</button>
-      <span style="color:var(--line)">·</span>
-      <button class="menu-btn" id="importBtn">読み込む</button>
-      <input type="file" id="importInput" accept="application/json" hidden />
     </div>
   </div>
 </div>
@@ -228,24 +270,40 @@ function fmtDate(iso) {
   return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
 }
 
+let searchQuery = '';
+
 async function render() {
-  const entries = (await allEntries()).sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
-  $('#count').textContent = entries.length ? `${entries.length}本` : '';
+  const all = (await allEntries()).sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
+  $('#count').textContent = all.length ? `${all.length}本` : '';
+  $('#searchbar').style.display = all.length ? 'flex' : 'none';
   const list = $('#list');
-  if (!entries.length) {
+
+  if (!all.length) {
     list.innerHTML = `<div class="empty-state"><div class="big">🍷</div>飲んだ一本を、ここに。<br>写真とひとことだけ。</div>`;
     return;
   }
+
+  const q = searchQuery.trim().toLowerCase();
+  const entries = q
+    ? all.filter(en => ((en.name||'') + ' ' + (en.note||'')).toLowerCase().includes(q))
+    : all;
+
+  if (!entries.length) {
+    list.innerHTML = `<div class="empty-state">「${escapeHtml(searchQuery)}」は見つかりませんでした。</div>`;
+    return;
+  }
+
   list.innerHTML = entries.map(en => `
     <div class="entry" data-id="${en.id}">
       ${en.photo ? `<img class="thumb" src="${en.photo}" alt="" />` : `<div class="thumb">🍷</div>`}
       <div class="body">
+        ${en.name ? `<p class="wname">${escapeHtml(en.name)}</p>` : ''}
         <div class="date">${fmtDate(en.date)}</div>
         <p class="note ${en.note ? '' : 'empty'}">${en.note ? escapeHtml(en.note) : 'ひとこと無し'}</p>
       </div>
     </div>`).join('');
   list.querySelectorAll('.entry').forEach(el =>
-    el.onclick = () => openEditor(entries.find(x => x.id == el.dataset.id)));
+    el.onclick = () => openEditor(all.find(x => x.id == el.dataset.id)));
 }
 function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
@@ -253,6 +311,7 @@ function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;'
 function openEditor(en) {
   editingId = en ? en.id : null;
   pickedPhoto = en ? en.photo : null;
+  $('#nameInput').value = en && en.name ? en.name : '';
   $('#noteInput').value = en ? en.note : '';
   $('#dateInput').value = (en ? en.date : todayLocal());
   setPhotoPreview(pickedPhoto);
@@ -265,6 +324,12 @@ function setPhotoPreview(src) {
   if (src) { img.src = src; img.style.display = 'block'; $('#photoIco').style.display='none'; $('#photoLbl').style.display='none'; }
   else { img.style.display = 'none'; $('#photoIco').style.display='block'; $('#photoLbl').style.display='block'; }
 }
+
+$('#settingsBtn').onclick = () => {
+  const p = $('#settingsPanel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+};
+$('#searchInput').oninput = e => { searchQuery = e.target.value; render(); };
 
 $('#addBtn').onclick = () => openEditor(null);
 $('#cancelBtn').onclick = closeEditor;
@@ -298,10 +363,11 @@ function shrinkImage(file, cb) {
 }
 
 $('#saveBtn').onclick = async () => {
+  const name = $('#nameInput').value.trim();
   const note = $('#noteInput').value.trim();
   const date = $('#dateInput').value || todayLocal();
-  if (!note && !pickedPhoto) { closeEditor(); return; }
-  await putEntry({ id: editingId || Date.now(), date, note, photo: pickedPhoto });
+  if (!name && !note && !pickedPhoto) { closeEditor(); return; }
+  await putEntry({ id: editingId || Date.now(), date, name, note, photo: pickedPhoto });
   closeEditor(); render();
 };
 $('#delBtn').onclick = async () => {
