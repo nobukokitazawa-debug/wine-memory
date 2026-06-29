@@ -397,6 +397,9 @@ $('#importInput').onchange = e => {
   r.readAsText(file);
 };
 
+// iPhoneに「この記録は勝手に消さないで」とお願いする（消えにくくする）
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist(); }
+
 openDB().then(render);
 </script>
 </body>
