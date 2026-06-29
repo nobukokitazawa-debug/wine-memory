@@ -169,11 +169,18 @@
     background: #fff; color: var(--ink); margin-bottom: 10px;
   }
   .name-input:focus { outline: none; border-color: var(--wine); }
+  .field-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .change-photo {
+    background: none; border: none; color: var(--wine);
+    font-size: 13px; cursor: pointer; font-family: inherit;
+    padding: 2px 4px; margin: 0 0 14px;
+  }
 
   .entry .wname {
     font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 2px;
     word-break: break-word;
   }
+  .entry .wsub { font-size: 12px; color: var(--ink-soft); margin: 0 0 2px; }
 </style>
 </head>
 <body>
@@ -209,13 +216,18 @@
       <span class="lbl" id="photoLbl">写真がまだありません</span>
       <img id="photoPreview" style="display:none" alt="" />
     </div>
-    <div class="photo-actions">
+    <div class="photo-actions" id="photoActions">
       <button type="button" class="pick-btn" id="cameraBtn"><span class="pi">📷</span> いま撮る</button>
       <button type="button" class="pick-btn" id="libraryBtn"><span class="pi">🖼</span> 写真から選ぶ</button>
     </div>
+    <button type="button" class="change-photo" id="changePhotoBtn" style="display:none">写真を変える</button>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
     <input type="file" id="photoInput" accept="image/*" hidden />
-    <input type="text" id="nameInput" class="name-input" placeholder="ワイン名（例：シャトー・ラトゥール 2015）" />
+    <input type="text" id="nameInput" class="name-input" placeholder="ワイン名（例：シャトー・ラトゥール）" />
+    <div class="field-row">
+      <input type="text" id="grapeInput" class="name-input" style="flex:2; margin-bottom:0" placeholder="品種（例：ピノ・ノワール）" />
+      <input type="text" id="vintageInput" class="name-input" style="flex:1; margin-bottom:0" placeholder="年（2015）" inputmode="numeric" />
+    </div>
     <textarea id="noteInput" placeholder="今飲んで思ったこと… 香り、味、余韻。何と合わせた？ 合った？"></textarea>
     <div class="date-row">
       <span>いつ</span>
@@ -275,7 +287,6 @@ let searchQuery = '';
 async function render() {
   const all = (await allEntries()).sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
   $('#count').textContent = all.length ? `${all.length}本` : '';
-  $('#searchbar').style.display = all.length ? 'flex' : 'none';
   const list = $('#list');
 
   if (!all.length) {
@@ -285,7 +296,7 @@ async function render() {
 
   const q = searchQuery.trim().toLowerCase();
   const entries = q
-    ? all.filter(en => ((en.name||'') + ' ' + (en.note||'')).toLowerCase().includes(q))
+    ? all.filter(en => ((en.name||'')+' '+(en.grape||'')+' '+(en.vintage||'')+' '+(en.note||'')).toLowerCase().includes(q))
     : all;
 
   if (!entries.length) {
@@ -293,15 +304,19 @@ async function render() {
     return;
   }
 
-  list.innerHTML = entries.map(en => `
+  list.innerHTML = entries.map(en => {
+    const sub = [en.grape, en.vintage].filter(Boolean).join(' · ');
+    return `
     <div class="entry" data-id="${en.id}">
       ${en.photo ? `<img class="thumb" src="${en.photo}" alt="" />` : `<div class="thumb">🍷</div>`}
       <div class="body">
         ${en.name ? `<p class="wname">${escapeHtml(en.name)}</p>` : ''}
+        ${sub ? `<p class="wsub">${escapeHtml(sub)}</p>` : ''}
         <div class="date">${fmtDate(en.date)}</div>
         <p class="note ${en.note ? '' : 'empty'}">${en.note ? escapeHtml(en.note) : 'ひとこと無し'}</p>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   list.querySelectorAll('.entry').forEach(el =>
     el.onclick = () => openEditor(all.find(x => x.id == el.dataset.id)));
 }
@@ -312,6 +327,8 @@ function openEditor(en) {
   editingId = en ? en.id : null;
   pickedPhoto = en ? en.photo : null;
   $('#nameInput').value = en && en.name ? en.name : '';
+  $('#grapeInput').value = en && en.grape ? en.grape : '';
+  $('#vintageInput').value = en && en.vintage ? en.vintage : '';
   $('#noteInput').value = en ? en.note : '';
   $('#dateInput').value = (en ? en.date : todayLocal());
   setPhotoPreview(pickedPhoto);
@@ -321,9 +338,22 @@ function openEditor(en) {
 function closeEditor() { $('#sheetBg').classList.remove('open'); }
 function setPhotoPreview(src) {
   const img = $('#photoPreview');
-  if (src) { img.src = src; img.style.display = 'block'; $('#photoIco').style.display='none'; $('#photoLbl').style.display='none'; }
-  else { img.style.display = 'none'; $('#photoIco').style.display='block'; $('#photoLbl').style.display='block'; }
+  if (src) {
+    img.src = src; img.style.display = 'block';
+    $('#photoIco').style.display='none'; $('#photoLbl').style.display='none';
+    $('#photoActions').style.display = 'none';
+    $('#changePhotoBtn').style.display = 'block';
+  } else {
+    img.style.display = 'none';
+    $('#photoIco').style.display='block'; $('#photoLbl').style.display='block';
+    $('#photoActions').style.display = 'flex';
+    $('#changePhotoBtn').style.display = 'none';
+  }
 }
+$('#changePhotoBtn').onclick = () => {
+  $('#photoActions').style.display = 'flex';
+  $('#changePhotoBtn').style.display = 'none';
+};
 
 $('#settingsBtn').onclick = () => {
   const p = $('#settingsPanel');
@@ -364,10 +394,12 @@ function shrinkImage(file, cb) {
 
 $('#saveBtn').onclick = async () => {
   const name = $('#nameInput').value.trim();
+  const grape = $('#grapeInput').value.trim();
+  const vintage = $('#vintageInput').value.trim();
   const note = $('#noteInput').value.trim();
   const date = $('#dateInput').value || todayLocal();
-  if (!name && !note && !pickedPhoto) { closeEditor(); return; }
-  await putEntry({ id: editingId || Date.now(), date, name, note, photo: pickedPhoto });
+  if (!name && !grape && !vintage && !note && !pickedPhoto) { closeEditor(); return; }
+  await putEntry({ id: editingId || Date.now(), date, name, grape, vintage, note, photo: pickedPhoto });
   closeEditor(); render();
 };
 $('#delBtn').onclick = async () => {
