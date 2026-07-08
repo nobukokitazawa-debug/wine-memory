@@ -201,7 +201,7 @@
   </div>
 
   <div class="searchbar" id="searchbar">
-    <input type="search" id="searchInput" placeholder="🔍 名前・品種・年・ひとことで探す" />
+    <input type="search" id="searchInput" placeholder="🔍 名前・生産者・品種・年で探す" />
     <span class="count" id="count"></span>
   </div>
 
@@ -227,10 +227,12 @@
     <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
     <input type="file" id="photoInput" accept="image/*" hidden />
     <input type="text" id="nameInput" class="name-input" placeholder="ワイン名（例：シャトー・ラトゥール）" />
+    <input type="text" id="producerInput" class="name-input" placeholder="生産者・造り手（例：G. コンテルノ）" />
     <div class="field-row">
       <input type="text" id="grapeInput" class="name-input" style="flex:2; margin-bottom:0" placeholder="品種（例：ピノ・ノワール）" />
       <input type="text" id="vintageInput" class="name-input" style="flex:1; margin-bottom:0" placeholder="年（2015）" inputmode="numeric" />
     </div>
+    <input type="text" id="priceInput" class="name-input" placeholder="価格（例：3,200円）" />
     <textarea id="noteInput" placeholder="今飲んで思ったこと… 香り、味、余韻。何と合わせた？ 合った？"></textarea>
     <div class="date-row">
       <span>いつ</span>
@@ -299,7 +301,7 @@ async function render() {
 
   const q = searchQuery.trim().toLowerCase();
   const entries = q
-    ? all.filter(en => ((en.name||'')+' '+(en.grape||'')+' '+(en.vintage||'')+' '+(en.note||'')).toLowerCase().includes(q))
+    ? all.filter(en => ((en.name||'')+' '+(en.producer||'')+' '+(en.grape||'')+' '+(en.vintage||'')+' '+(en.price||'')+' '+(en.note||'')).toLowerCase().includes(q))
     : all;
 
   if (!entries.length) {
@@ -308,12 +310,13 @@ async function render() {
   }
 
   list.innerHTML = entries.map(en => {
-    const sub = [en.grape, en.vintage].filter(Boolean).join(' · ');
+    const sub = [en.grape, en.vintage, en.price].filter(Boolean).join(' · ');
     return `
     <div class="entry" data-id="${en.id}">
       ${en.photo ? `<img class="thumb" src="${en.photo}" alt="" />` : `<div class="thumb">🍷</div>`}
       <div class="body">
         ${en.name ? `<p class="wname">${escapeHtml(en.name)}</p>` : ''}
+        ${en.producer ? `<p class="wsub">${escapeHtml(en.producer)}</p>` : ''}
         ${sub ? `<p class="wsub">${escapeHtml(sub)}</p>` : ''}
         <div class="date">${fmtDate(en.date)}</div>
         <p class="note ${en.note ? '' : 'empty'}">${en.note ? escapeHtml(en.note) : 'ひとこと無し'}</p>
@@ -330,8 +333,10 @@ function openEditor(en) {
   editingId = en ? en.id : null;
   pickedPhoto = en ? en.photo : null;
   $('#nameInput').value = en && en.name ? en.name : '';
+  $('#producerInput').value = en && en.producer ? en.producer : '';
   $('#grapeInput').value = en && en.grape ? en.grape : '';
   $('#vintageInput').value = en && en.vintage ? en.vintage : '';
+  $('#priceInput').value = en && en.price ? en.price : '';
   $('#noteInput').value = en ? en.note : '';
   $('#dateInput').value = (en ? en.date : todayLocal());
   setPhotoPreview(pickedPhoto);
@@ -397,12 +402,14 @@ function shrinkImage(file, cb) {
 
 $('#saveBtn').onclick = async () => {
   const name = $('#nameInput').value.trim();
+  const producer = $('#producerInput').value.trim();
   const grape = $('#grapeInput').value.trim();
   const vintage = $('#vintageInput').value.trim();
+  const price = $('#priceInput').value.trim();
   const note = $('#noteInput').value.trim();
   const date = $('#dateInput').value || todayLocal();
-  if (!name && !grape && !vintage && !note && !pickedPhoto) { closeEditor(); return; }
-  await putEntry({ id: editingId || Date.now(), date, name, grape, vintage, note, photo: pickedPhoto });
+  if (!name && !producer && !grape && !vintage && !price && !note && !pickedPhoto) { closeEditor(); return; }
+  await putEntry({ id: editingId || Date.now(), date, name, producer, grape, vintage, price, note, photo: pickedPhoto });
   closeEditor(); render();
 };
 $('#delBtn').onclick = async () => {
